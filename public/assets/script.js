@@ -1,5 +1,8 @@
 let token = localStorage.getItem("authToken");
 
+let currentEditPostId = null;
+let isEditing = false;
+
 function register() {
   const username = document.getElementById("username").value;
   const email = document.getElementById("email").value;
@@ -80,12 +83,31 @@ function fetchPosts() {
         const div = document.createElement("div");
         const deleteButton = `<button class="delete-button" onclick="onClickDeleteButton(this, '${post.id}')">Delete</button>`;
 
-        div.innerHTML = `<h3>${post.title}</h3><p>${
-          post.content
-        }</p><small>By: ${post.postedBy} on ${new Date(
+        const safeTitle = post.title
+          .replace(/'/g, "\\'") // Escape single quote
+          .replace(/"/g, "&quot;") // HTML entity for double quote
+          .replace(/`/g, "\\`"); // Escape backtick
+
+        const safeContent = post.content
+          .replace(/'/g, "\\'")
+          .replace(/"/g, "&quot;")
+          .replace(/`/g, "\\`");
+
+        const editButton = `<button class="edit-button" 
+          onclick="onClickEditButton(this, '${post.id}', 
+          '${safeTitle}',
+          '${safeContent}')">Edit</button>`;
+
+        div.innerHTML = `
+          <h3 data-post-id="${post.id}" class="post-title-display">${
+          post.title
+        }</h3>
+          <p>${post.content}</p>
+          <small>By: ${post.postedBy} on ${new Date(
           post.createdOn
         ).toLocaleString()}</small>
-        ${deleteButton}`;
+        <div class="post-actions">${editButton} ${deleteButton}</div>
+        `;
         postsContainer.appendChild(div);
       });
     });
@@ -105,33 +127,108 @@ function createPost() {
     .then((res) => res.json())
     .then(() => {
       alert("Post created successfully");
+      document.getElementById("post-title").value = "";
+      document.getElementById("post-content").value = "";
+
       fetchPosts();
     });
 }
 
 // Delete post function
-async function onClickDeleteButton(e, post) {
+async function onClickDeleteButton(e, postId) {
   // Get the parent list element of button
-  const div = e.parentElement;
+  const postContainerDiv = e.parentElement.parentElement;
 
   try {
     // Send delete request
-    const response = await fetch(`http://localhost:3001/api/posts/${post}`, {
+    const response = await fetch(`http://localhost:3001/api/posts/${postId}`, {
       method: "DELETE",
       headers: {
         Authorization: `Bearer ${token}`,
       },
     });
-    const div = e.parentElement;
-    console.log("Element to be removed", div);
 
     if (response.ok) {
-      div.remove();
+      postContainerDiv.remove();
+      console.log(`Removed post: ${postId}`);
     } else {
       const data = await response.json();
       alert("Error with removing post");
     }
   } catch (error) {
     console.error("Error with removing post:", error);
+  }
+}
+
+// Resets form and state into create mode
+function cancelEditMode() {
+  isEditing = false;
+  currentEditPostId = null;
+
+  // Clears form input
+  document.getElementById("post-title").value = "";
+  document.getElementById("post-content").value = "";
+
+  document.getElementById("main-submit-btn").textContent = "Create Post";
+  document.getElementById("cancel-edit-btn").classList.add("hidden");
+}
+
+// PUT request to update the post
+async function updatePost() {
+  const title = document.getElementById("post-title").value;
+  const content = document.getElementById("post-content").value;
+  const postId = currentEditPostId;
+
+  try {
+    const response = await fetch(`http://localhost:3001/api/posts/${postId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ title, content }),
+    });
+
+    if (response.ok) {
+      alert("Post updated!");
+      cancelEditMode();
+      fetchPosts();
+    } else {
+      const errorData = await response.json();
+      alert(`Failed to update post: ${errorData.error || "Server error"}`);
+    }
+  } catch (error) {
+    console.error("Error updating post:", error);
+    alert("Error updating the post");
+  }
+}
+
+function onClickEditButton(e, postId, currentTitle, currentContent) {
+  console.log("Edit button clicked! Post ID: ", postId);
+  try {
+    currentEditPostId = postId;
+    isEditing = true;
+
+    document.getElementById("post-title").value = currentTitle;
+    document.getElementById("post-content").value = currentContent;
+
+    document.getElementById("main-submit-btn").textContent = "Save Changes";
+    document.getElementById("cancel-edit-btn").classList.remove("hidden");
+
+    const appContainer = document.getElementById("app-container");
+    if (appContainer) {
+      appContainer.scrollIntoView({ behavior: "smooth" });
+    }
+  } catch (error) {
+    console.error("Error inside onClickEditButton", error);
+    alert("An error occurred during Edit. Check console for details");
+  }
+}
+
+function handlePostSubmit() {
+  if (isEditing) {
+    updatePost();
+  } else {
+    createPost();
   }
 }

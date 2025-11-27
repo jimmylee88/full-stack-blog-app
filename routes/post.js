@@ -19,7 +19,11 @@ app.post("/", async (req, res) => {
 // Route to get all posts
 app.get("/", async (req, res) => {
   try {
-    const posts = await Post.findAll();
+    const posts = await Post.findAll({
+      order: [
+        ["createdOn", "DESC"], //  show newest first instead of default behaviour
+      ],
+    });
 
     res.json(posts);
   } catch (error) {
@@ -54,15 +58,15 @@ app.put("/:id", async (req, res) => {
 app.delete("/:id", async (req, res) => {
   try {
     const deletedRows = await Post.destroy({ where: { id: req.params.id } });
-    
+
     // Check if a row was actually deleted (optional but good)
     if (deletedRows === 0) {
-        // If 0 rows were deleted, the post didn't exist
-        return res.status(404).json({ error: "Post not found" });
+      // If 0 rows were deleted, the post didn't exist
+      return res.status(404).json({ error: "Post not found" });
     }
-    
+
     // Use 204 No Content for a successful DELETE
-    res.status(204).send(); 
+    res.status(204).send();
   } catch (error) {
     console.error("Database error during post deletion:", error); // Log the error on the server
     res.status(500).json({ error: "Error deleting post" });
